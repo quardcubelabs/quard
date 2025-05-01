@@ -6,6 +6,21 @@ import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import type { User, Session, AuthError } from "@supabase/supabase-js"
 
+// Define the production URL
+const PRODUCTION_URL = "https://quardcubelabs-three.vercel.app"
+
+// Helper function to get the appropriate base URL
+const getBaseUrl = () => {
+  // In production, use the Vercel deployment URL
+  // In development, use the current origin
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return window.location.origin
+    }
+  }
+  return PRODUCTION_URL
+}
+
 type AuthContextType = {
   user: User | null
   session: Session | null
@@ -18,6 +33,29 @@ type AuthContextType = {
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>
   updateProfile: (data: any) => Promise<{ error: AuthError | null }>
+}
+
+// Define types for user data and profile data
+type UserData = {
+  user_id: string
+  email: string | undefined
+  name: string
+  country?: string
+  created_at: string
+  updated_at: string
+  avatar_url?: string
+}
+
+type ProfileData = {
+  name?: string
+  avatar_url?: string
+  country?: string
+  street?: string
+  city?: string
+  state?: string
+  postal_code?: string
+  phone?: string
+  [key: string]: string | undefined
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -81,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [supabase] = useState(() => createBrowserClient())
+  const [baseUrl] = useState(() => getBaseUrl())
 
   useEffect(() => {
     const setData = async () => {
@@ -126,7 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               // If no profile exists, create one
               if (!profile) {
                 try {
-                  const userData = {
+                  const userData: UserData = {
                     user_id: session.user.id,
                     email: session.user.email,
                     name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || '',
@@ -135,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   };
                   
                   if (session.user.user_metadata?.avatar_url) {
-                    userData['avatar_url'] = session.user.user_metadata.avatar_url;
+                    userData.avatar_url = session.user.user_metadata.avatar_url;
                   }
                   
                   const { error: insertError } = await supabase
@@ -185,7 +224,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             
             // After successful sign-in, redirect to home page
             if (event === 'SIGNED_IN') {
-              router.push('/')
+              // Redirect to the production URL if we're in production
+              if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                window.location.href = `${PRODUCTION_URL}/`;
+              } else {
+                router.push('/')
+              }
             }
           } else {
             console.log("Session cleared")
@@ -194,7 +238,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             
             // After sign out, redirect to login page
             if (event === 'SIGNED_OUT') {
-              router.push('/auth/login')
+              // Redirect to the production URL if we're in production
+              if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                window.location.href = `${PRODUCTION_URL}/auth/login`;
+              } else {
+                router.push('/auth/login')
+              }
             }
           }
         } catch (stateChangeError) {
@@ -216,7 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       return () => {}; // Empty cleanup if setup failed
     }
-  }, [supabase, router])
+  }, [supabase, router, baseUrl])
 
   const signUp = async (email: string, password: string, metadata?: any) => {
     try {
@@ -225,14 +274,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: {
           data: metadata || {},
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${baseUrl}/auth/callback`,
         },
       })
       
       // If sign up successful and no verification is required, create user profile
       if (!error && data?.user) {
         try {
-          const userData = {
+          const userData: UserData = {
             user_id: data.user.id,
             email: data.user.email || '',
             name: metadata?.name || '',
@@ -287,7 +336,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${baseUrl}/auth/callback`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -318,7 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "facebook",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${baseUrl}/auth/callback`,
         },
       })
       
@@ -345,7 +394,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${baseUrl}/auth/callback`,
         },
       })
       
@@ -392,7 +441,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+        redirectTo: `${baseUrl}/auth/reset-password`,
       })
       return { error }
     } catch (error: any) {
@@ -404,17 +453,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = async (data: any) => {
     try {
       // Limit the size of data being updated
-      const trimmedData = {};
+      const trimmedData: ProfileData = {};
       
       // Only include essential fields
-      if (data.name) trimmedData['name'] = data.name;
-      if (data.avatar_url) trimmedData['avatar_url'] = data.avatar_url;
-      if (data.country) trimmedData['country'] = data.country;
-      if (data.street) trimmedData['street'] = data.street;
-      if (data.city) trimmedData['city'] = data.city;
-      if (data.state) trimmedData['state'] = data.state;
-      if (data.postal_code) trimmedData['postal_code'] = data.postal_code;
-      if (data.phone) trimmedData['phone'] = data.phone;
+      if (data.name) trimmedData.name = data.name;
+      if (data.avatar_url) trimmedData.avatar_url = data.avatar_url;
+      if (data.country) trimmedData.country = data.country;
+      if (data.street) trimmedData.street = data.street;
+      if (data.city) trimmedData.city = data.city;
+      if (data.state) trimmedData.state = data.state;
+      if (data.postal_code) trimmedData.postal_code = data.postal_code;
+      if (data.phone) trimmedData.phone = data.phone;
       
       const { error } = await supabase.auth.updateUser({
         data: trimmedData,
