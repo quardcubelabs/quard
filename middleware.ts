@@ -2,18 +2,50 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextRequest, NextResponse } from 'next/server'
 import type { Database } from '@/lib/database.types'
 
+// Define the production URL
+const PRODUCTION_URL = "https://quardcubelabs-three.vercel.app"
+
+// Helper to determine domain for cookie settings
+const getCookieDomain = (req: NextRequest): string | undefined => {
+  const { hostname } = req.nextUrl
+  if (process.env.NODE_ENV === 'production' || 
+      hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    // In production, use the Vercel domain
+    return 'quardcubelabs-three.vercel.app'
+  }
+  // Don't set domain for localhost
+  return undefined
+}
+
 // This middleware runs on every request to the site
 export async function middleware(req: NextRequest) {
   // Create a response to modify
   const res = NextResponse.next()
   
-  // Create a Supabase client for the middleware
-  const supabase = createMiddlewareClient<Database>({ req, res })
+  // Get the cookie domain based on environment
+  const cookieDomain = getCookieDomain(req)
+  
+  // Create a Supabase client for the middleware with proper cookie options
+  const supabase = createMiddlewareClient<Database>(
+    { req, res },
+    {
+      cookieOptions: {
+        // These options are essential for cookies to work in production
+        domain: cookieDomain,
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    }
+  )
   
   // Refresh the session if it exists
   const {
     data: { session },
   } = await supabase.auth.getSession()
+
+  // Log authentication status for debugging
+  console.log(`[Middleware] Path: ${req.nextUrl.pathname}, Authenticated: ${!!session}`)
 
   // URLs that require authentication
   const protectedRoutes = ['/account', '/orders']

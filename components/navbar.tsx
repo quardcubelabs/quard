@@ -10,6 +10,7 @@ import OrderIcon from "@/components/order-icon"
 import UserAvatar from "@/components/user-avatar"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/contexts/auth-context"
+import UserNav from "@/components/nav/user-nav"
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -83,7 +84,7 @@ export default function Navbar() {
 
           <div className="hidden md:flex items-center gap-4">
             <OrderIcon />
-            <UserAvatar />
+            <UserNav />
             {!user && !isLoading && (
               <Button
                 className="bg-navy hover:bg-navy/90 text-white rounded-full px-6"
@@ -97,7 +98,7 @@ export default function Navbar() {
           {/* Mobile Menu Button and Cart */}
           <div className="md:hidden flex items-center gap-1 sm:gap-2">
             <OrderIcon />
-            <UserAvatar />
+            <UserNav />
             <button className="p-1 text-navy" onClick={() => setIsMenuOpen(!isMenuOpen)}>
               {isMenuOpen ? <X className="h-5 w-5 sm:h-6 sm:w-6" /> : <Menu className="h-5 w-5 sm:h-6 sm:w-6" />}
             </button>

@@ -27,12 +27,24 @@ const getRedirectURL = (requestUrl: URL): string => {
   return requestUrl.origin
 }
 
+// Helper to determine domain for cookie settings
+const getCookieDomain = (requestUrl: URL): string | undefined => {
+  if (process.env.NODE_ENV === 'production' || 
+      requestUrl.hostname !== 'localhost' && requestUrl.hostname !== '127.0.0.1') {
+    // In production, use the Vercel domain
+    return 'quardcubelabs-three.vercel.app'
+  }
+  // Don't set domain for localhost
+  return undefined
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get("code")
   const error = requestUrl.searchParams.get("error")
   const errorDescription = requestUrl.searchParams.get("error_description")
   const redirectBase = getRedirectURL(requestUrl)
+  const cookieDomain = getCookieDomain(requestUrl)
 
   if (error) {
     console.error("OAuth Error:", error, errorDescription)
@@ -44,11 +56,34 @@ export async function GET(request: Request) {
   if (code) {
     try {
       // Use the createRouteHandlerClient which properly handles Next.js cookies
-      const supabase = createRouteHandlerClient<Database>({ cookies })
+      const cookieStore = cookies()
+      const supabase = createRouteHandlerClient<Database>({ 
+        cookies: () => cookieStore 
+      }, {
+        // These options help ensure cookies are correctly set in production
+        auth: {
+          flowType: 'pkce',
+          autoRefreshToken: true,
+          persistSession: true,
+          cookieOptions: {
+            // Essential for proper cookie setting in production
+            domain: cookieDomain,
+            path: '/',
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+          }
+        }
+      })
       
       try {
         // Exchange the code for a session - this will automatically set the cookies
         await supabase.auth.exchangeCodeForSession(code)
+        
+        // Log the cookie for debugging
+        console.log("Auth cookies set:", cookieStore.getAll()
+          .filter(cookie => cookie.name.includes('supabase'))
+          .map(c => `${c.name}=${c.value.substring(0, 10)}...`)
+        )
         
         // Get user profile to check if we need to create one
         const { data: { user }, error: userError } = await supabase.auth.getUser()
@@ -116,8 +151,28 @@ export async function GET(request: Request) {
           }
         }
 
-        // Redirect to home page after successful authentication
-        return NextResponse.redirect(`${redirectBase}`)
+        // Create a custom response with explicit cookie handling for production
+        const response = NextResponse.redirect(`${redirectBase}`)
+        
+        // Copy cookies from cookieStore to the response with production-friendly settings
+        const supabaseCookies = cookieStore.getAll()
+        for (const cookie of supabaseCookies) {
+          if (cookie.name.includes('supabase')) {
+            // Use production-friendly cookie settings
+            response.cookies.set({
+              name: cookie.name,
+              value: cookie.value,
+              domain: cookieDomain,
+              path: '/',
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+              httpOnly: cookie.httpOnly,
+              maxAge: 60 * 60 * 24 * 7, // 1 week
+            })
+          }
+        }
+        
+        return response
         
       } catch (authProcessError) {
         console.error("Error processing authentication:", authProcessError)
