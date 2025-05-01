@@ -17,11 +17,32 @@ const getBaseUrl = () => {
   return PRODUCTION_URL
 }
 
+// Helper to determine cookie domain based on environment
+const getCookieDomain = (): string | undefined => {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      // In production, use the domain without www
+      return 'quardcubelabs-three.vercel.app'
+    }
+  }
+  // Don't set domain for localhost
+  return undefined
+}
+
 // Create a single supabase client for the browser
 export const createBrowserClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
   const redirectUrl = getBaseUrl()
+  const cookieDomain = getCookieDomain()
+  
+  console.log(`[Supabase] Creating browser client with redirect URL: ${redirectUrl}`)
+  if (cookieDomain) {
+    console.log(`[Supabase] Using cookie domain: ${cookieDomain}`)
+  } else {
+    console.log(`[Supabase] Using default cookie domain (localhost)`)
+  }
 
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
@@ -29,6 +50,32 @@ export const createBrowserClient = () => {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
+      storageKey: 'sb-auth-token',
+      storage: {
+        getItem: (key) => {
+          try {
+            const storedData = globalThis.localStorage?.getItem(key) ?? null
+            return storedData
+          } catch (error) {
+            console.error(`[Supabase] Error getting storage item: ${error}`)
+            return null
+          }
+        },
+        setItem: (key, value) => {
+          try {
+            globalThis.localStorage?.setItem(key, value)
+          } catch (error) {
+            console.error(`[Supabase] Error setting storage item: ${error}`)
+          }
+        },
+        removeItem: (key) => {
+          try {
+            globalThis.localStorage?.removeItem(key)
+          } catch (error) {
+            console.error(`[Supabase] Error removing storage item: ${error}`)
+          }
+        }
+      }
     },
     global: {
       headers: {
@@ -50,8 +97,7 @@ export const createServerClient = (cookieOptions?: { cookies: () => { get: (name
         flowType: 'pkce',
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false, // This must be false for server-side rendering
-        cookies: cookieOptions.cookies
+        detectSessionInUrl: false // This must be false for server-side rendering
       }
     })
   } else {
