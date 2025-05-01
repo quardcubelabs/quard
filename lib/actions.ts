@@ -1,6 +1,50 @@
 "use server"
 
-import { products, cartItems } from "@/lib/data"
+import { products } from "@/lib/data"
+import { createServerClient } from "@/lib/supabase"
+import { revalidatePath } from "next/cache"
+import { sendOrderNotification, sendOrderConfirmationToCustomer } from "@/lib/email-service"
+import { randomUUID } from "crypto"
+
+// Type definitions
+interface CartItem {
+  id: string;
+  quantity: number;
+  name?: string;
+  price?: number;
+}
+
+interface CustomerData {
+  name: string;
+  email: string;
+  phone: string;
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    country: string;
+    postalCode: string;
+  };
+  paymentMethod: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  [key: string]: any;
+}
+
+interface UserData {
+  name: string;
+  email: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postal_code?: string;
+}
 
 // Contact form submission
 export async function submitContactForm(formData: FormData) {
@@ -21,6 +65,143 @@ export async function submitContactForm(formData: FormData) {
   }
 }
 
+// Create an order
+export async function createOrder(productId: string, quantity: number, userId: string, userData: UserData) {
+  console.log('Creating order for product:', productId);
+  console.log('Quantity:', quantity);
+  console.log('User ID:', userId);
+  console.log('User data:', userData);
+
+  try {
+    // Create Supabase client
+    const supabase = createServerClient();
+    
+    // Fetch product details
+    const { data: productData, error: productError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
+      
+    if (productError) {
+      throw new Error(`Failed to fetch product: ${productError.message}`);
+    }
+    
+    if (!productData) {
+      throw new Error(`Product not found: ${productId}`);
+    }
+    
+    // Check stock
+    if (productData.stock < quantity) {
+      throw new Error(`Insufficient stock for ${productData.name}. Available: ${productData.stock}, Requested: ${quantity}`);
+    }
+
+    // Create the order
+    const orderId = randomUUID();
+    
+    const orderItem = {
+      id: productId,
+      name: productData.name,
+      price: productData.price,
+      quantity: quantity,
+    };
+
+    const totalAmount = orderItem.price * quantity;
+    
+    // Format shipping address from user data
+    const shippingAddress = {
+      street: userData.street || '',
+      city: userData.city || '',
+      state: userData.state || '',
+      country: userData.country || 'Tanzania',
+      postalCode: userData.postal_code || '',
+    };
+    
+    const orderData = {
+      id: orderId,
+      user_id: userId,
+      items: [orderItem],
+      total_amount: totalAmount,
+      customer_name: userData.name,
+      customer_email: userData.email,
+      shipping_address: shippingAddress,
+      payment_method: 'Credit Card', // Default payment method
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    };
+
+    // Insert order into Supabase
+    const { error: orderError } = await supabase
+      .from('orders')
+      .insert(orderData);
+      
+    if (orderError) {
+      throw new Error(`Failed to create order: ${orderError.message}`);
+    }
+    
+    console.log(`Order created with ID: ${orderId}`);
+
+    // Update product stock
+    const newStock = productData.stock - quantity;
+    
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ stock: newStock })
+      .eq('id', productId);
+      
+    if (updateError) {
+      console.error(`Failed to update stock for product ${productId}: ${updateError.message}`);
+    } else {
+      console.log(`Updated stock for ${productData.name}: ${productData.stock} → ${newStock}`);
+    }
+
+    // Send email notifications
+    console.log('Attempting to send email notifications for order:', orderId);
+    
+    const orderDetails = {
+      orderId,
+      customerName: userData.name,
+      customerEmail: userData.email,
+      items: [{
+        name: productData.name,
+        quantity: quantity,
+        price: productData.price
+      }],
+      total: totalAmount,
+      shippingAddress: shippingAddress,
+      orderDate: new Date().toISOString()
+    };
+
+    // Send notification to admin
+    const adminEmailResult = await sendOrderNotification(orderDetails);
+    console.log('Admin notification result:', adminEmailResult);
+    
+    // Send confirmation to customer if email provided
+    let customerEmailResult = null;
+    if (userData.email) {
+      customerEmailResult = await sendOrderConfirmationToCustomer(orderDetails);
+      console.log('Customer confirmation result:', customerEmailResult);
+    } else {
+      console.log('No customer email provided, skipping confirmation email');
+    }
+    
+    return {
+      success: true,
+      orderId,
+      emailResults: {
+        admin: adminEmailResult,
+        customer: customerEmailResult
+      }
+    };
+  } catch (error) {
+    console.error('Error creating order:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'An unexpected error occurred'
+    };
+  }
+}
+
 // Newsletter subscription
 export async function subscribeToNewsletter(formData: FormData) {
   const email = formData.get("email")
@@ -33,120 +214,5 @@ export async function subscribeToNewsletter(formData: FormData) {
   return {
     success: true,
     message: "Thank you for subscribing to our newsletter!",
-  }
-}
-
-// Add to cart
-export async function addToCart(productId: number, quantity = 1) {
-  const product = products.find((p) => p.id === productId)
-
-  if (!product) {
-    return {
-      success: false,
-      message: "Product not found",
-    }
-  }
-
-  // Check if product is already in cart
-  const existingItemIndex = cartItems.findIndex((item) => item.product?.id === productId)
-
-  if (existingItemIndex >= 0) {
-    // Update quantity
-    cartItems[existingItemIndex].quantity += quantity
-  } else {
-    // Add new item
-    cartItems.push({
-      product,
-      quantity,
-    })
-  }
-
-  return {
-    success: true,
-    message: `${product.name} added to cart`,
-    cartCount: cartItems.reduce((total, item) => total + item.quantity, 0),
-  }
-}
-
-// Update cart item quantity
-export async function updateCartItemQuantity(productId: number, quantity: number) {
-  const itemIndex = cartItems.findIndex((item) => item.product?.id === productId)
-
-  if (itemIndex < 0) {
-    return {
-      success: false,
-      message: "Product not found in cart",
-    }
-  }
-
-  if (quantity <= 0) {
-    // Remove item if quantity is 0 or negative
-    cartItems.splice(itemIndex, 1)
-  } else {
-    // Update quantity
-    cartItems[itemIndex].quantity = quantity
-  }
-
-  return {
-    success: true,
-    message: "Cart updated",
-    cartCount: cartItems.reduce((total, item) => total + item.quantity, 0),
-  }
-}
-
-// Remove item from cart
-export async function removeFromCart(productId: number) {
-  const itemIndex = cartItems.findIndex((item) => item.product?.id === productId)
-
-  if (itemIndex < 0) {
-    return {
-      success: false,
-      message: "Product not found in cart",
-    }
-  }
-
-  cartItems.splice(itemIndex, 1)
-
-  return {
-    success: true,
-    message: "Item removed from cart",
-    cartCount: cartItems.reduce((total, item) => total + item.quantity, 0),
-  }
-}
-
-// Clear cart
-export async function clearCart() {
-  cartItems.length = 0
-
-  return {
-    success: true,
-    message: "Cart cleared",
-    cartCount: 0,
-  }
-}
-
-// Checkout
-export async function checkout(formData: FormData) {
-  // In a real application, you would process payment and create an order
-  const name = formData.get("name")
-  const email = formData.get("email")
-  const address = formData.get("address")
-  const city = formData.get("city")
-  const postalCode = formData.get("postalCode")
-  const country = formData.get("country")
-
-  console.log("Checkout:", { name, email, address, city, postalCode, country })
-  console.log("Cart items:", cartItems)
-
-  // Simulate a delay
-  await new Promise((resolve) => setTimeout(resolve, 2000))
-
-  // Clear cart after successful checkout
-  cartItems.length = 0
-
-  return {
-    success: true,
-    message: "Thank you for your order! We will process it shortly.",
-    orderId: `ORD-${Date.now()}`,
   }
 }

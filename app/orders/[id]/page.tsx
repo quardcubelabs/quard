@@ -159,19 +159,19 @@ export default function OrderDetailsPage() {
             }
             .invoice {
               width: 210mm;
-              min-height: 297mm;
-              padding: 20mm;
+              padding: 15mm;
               margin: 0 auto;
               background-color: white;
               box-sizing: border-box;
+              page-break-after: avoid;
             }
             .header {
               display: flex;
               justify-content: space-between;
               align-items: flex-start;
-              margin-bottom: 30px;
-              padding-bottom: 20px;
-              border-bottom: 2px solid #2B5741;
+              margin-bottom: 20px;
+              padding-bottom: 15px;
+              border-bottom: 2px solid #00467f;
             }
             .logo-container {
               display: flex;
@@ -214,7 +214,7 @@ export default function OrderDetailsPage() {
             .company-name {
               font-size: 24px;
               font-weight: bold;
-              color: #2B5741;
+              color: #00467f;
               margin: 0 0 10px 0;
             }
             .company-details {
@@ -227,7 +227,7 @@ export default function OrderDetailsPage() {
             .invoice-title {
               font-size: 28px;
               font-weight: bold;
-              color: #2B5741;
+              color: #00467f;
               margin: 0 0 10px 0;
             }
             .invoice-number {
@@ -243,7 +243,7 @@ export default function OrderDetailsPage() {
             }
             .section-title {
               font-size: 16px;
-              color: #2B5741;
+              color: #00467f;
               margin-bottom: 10px;
               text-transform: uppercase;
               font-weight: bold;
@@ -262,7 +262,7 @@ export default function OrderDetailsPage() {
               background-color: white;
             }
             th {
-              background-color: #2B5741;
+              background-color: #00467f;
               color: white;
               text-align: left;
               padding: 12px;
@@ -299,17 +299,17 @@ export default function OrderDetailsPage() {
             .total-table tr:last-child {
               font-weight: bold;
               font-size: 16px;
-              color: #2B5741;
-              border-top: 2px solid #2B5741;
+              color: #00467f;
+              border-top: 2px solid #00467f;
             }
             .footer {
-              margin-top: 40px;
-              padding-top: 20px;
+              margin-top: 30px;
+              padding-top: 15px;
               border-top: 1px solid #ddd;
             }
             .terms-title {
               font-size: 16px;
-              color: #2B5741;
+              color: #00467f;
               margin-bottom: 10px;
               font-weight: bold;
             }
@@ -326,10 +326,17 @@ export default function OrderDetailsPage() {
               }
               .invoice {
                 width: 100%;
-                min-height: auto;
-                padding: 20mm;
+                padding: 15mm;
                 margin: 0;
                 box-shadow: none;
+                page-break-after: avoid;
+                page-break-inside: avoid;
+              }
+              .items-table {
+                page-break-inside: avoid;
+              }
+              .total-section, .footer {
+                page-break-inside: avoid;
               }
             }
           </style>
@@ -352,11 +359,11 @@ export default function OrderDetailsPage() {
                   </div>
                 </div>
                 <div class="company-info">
-                  <div class="company-name">QUARDCUBELABS</div>
-                  <div class="company-details">
-                    P.O. Box 33761, Dar es Salaam, Tanzania<br>
-                    Mobile: +255(0) 746 624 875<br>
-                    Email: info@quardcubelabs.com
+              <div class="company-name">QUARDCUBELABS</div>
+              <div class="company-details">
+                  P.O. Box 33761, Dar es Salaam, Tanzania<br>
+                  Mobile: +255(0) 746 624 875<br>
+                  Email: info@quardcubelabs.com
                   </div>
                 </div>
               </div>
@@ -404,25 +411,25 @@ export default function OrderDetailsPage() {
             <div class="section">
               <div class="section-title">Order Details</div>
               <table class="items-table">
-                <thead>
-                  <tr>
-                    <th style="width: 40%">Product</th>
+              <thead>
+                <tr>
+                  <th style="width: 40%">Product</th>
                     <th style="width: 20%">Quantity</th>
                     <th style="width: 20%">Unit Price</th>
                     <th style="width: 20%">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${order.items.map(item => `
-                    <tr>
-                      <td>${item.name}</td>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.items.map(item => `
+                  <tr>
+                    <td>${item.name}</td>
                       <td>${item.quantity}</td>
                       <td>TZS ${item.price.toLocaleString()}</td>
                       <td>TZS ${(item.price * item.quantity).toLocaleString()}</td>
-                    </tr>
-                  `).join("")}
-                </tbody>
-              </table>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
             </div>
 
             <div class="total-section">

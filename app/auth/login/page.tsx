@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
@@ -17,7 +17,7 @@ import { useAuth } from "@/contexts/auth-context"
 export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { signIn, signInWithGoogle, signInWithFacebook, signInWithApple, user } = useAuth()
+  const { signIn, signInWithGoogle, signInWithFacebook, signInWithApple, user, isLoading: authLoading } = useAuth()
 
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -25,70 +25,105 @@ export default function LoginPage() {
     password: "",
   })
 
-  // Handle error messages from URL
+  // Handle error messages from URL - wrapped in a try/catch for safety
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search)
-    const error = searchParams.get("error")
-    const message = searchParams.get("message")
+    try {
+      const searchParams = new URLSearchParams(window.location.search)
+      const error = searchParams.get("error")
+      const message = searchParams.get("message")
 
-    if (error && message) {
-      toast({
-        title: "Authentication Error",
-        description: message,
-        variant: "destructive",
-      })
-      // Clear the URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname)
+      if (error && message) {
+        toast({
+          title: "Authentication Error",
+          description: message,
+          variant: "destructive",
+        })
+        // Clear the URL parameters
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+    } catch (error) {
+      console.error("Error handling URL parameters:", error);
     }
   }, [toast])
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
+  // Redirect if already logged in - wrapped in useCallback to prevent unnecessary function recreation
+  const redirectIfLoggedIn = useCallback(() => {
+    try {
+      if (user && !authLoading) {
+        console.log("User is logged in, redirecting to home")
       router.push("/")
+      }
+    } catch (error) {
+      console.error("Error in redirect:", error);
     }
-  }, [user, router])
+  }, [user, authLoading, router]);
+
+  // Use the callback in useEffect
+  useEffect(() => {
+    redirectIfLoggedIn();
+  }, [redirectIfLoggedIn]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+    } catch (error) {
+      console.error("Error updating form field:", error);
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
+    try {
     e.preventDefault()
     setIsLoading(true)
 
     try {
+        console.log("Signing in with email and password")
       const { error } = await signIn(formData.email, formData.password)
 
       if (error) {
+          console.error("Sign-in error:", error.message)
         toast({
           title: "Error",
           description: error.message,
           variant: "destructive",
         })
+          setIsLoading(false)
       } else {
+          console.log("Sign-in successful, redirect handled by auth context")
+          // The redirect will be handled by the auth state change listener in the context
         toast({
           title: "Success",
           description: "You have successfully logged in.",
         })
-        router.push("/")
+        }
+      } catch (error: any) {
+        console.error("Exception during sign-in:", error)
+        toast({
+          title: "Error",
+          description: error.message || "An error occurred during login.",
+          variant: "destructive",
+        })
+        setIsLoading(false)
       }
-    } catch (error: any) {
+    } catch (outerError) {
+      console.error("Outer error in handleSubmit:", outerError);
+      setIsLoading(false);
       toast({
         title: "Error",
-        description: error.message || "An error occurred during login.",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       })
-    } finally {
-      setIsLoading(false)
     }
   }
 
   const handleGoogleSignIn = async () => {
     try {
+      console.log("Initiating Google sign-in")
       await signInWithGoogle()
+      // Redirect will be handled by the callback route
     } catch (error: any) {
+      console.error("Exception during Google sign-in:", error)
       toast({
         title: "Error",
         description: error.message || "An error occurred during Google sign in.",
@@ -99,8 +134,11 @@ export default function LoginPage() {
 
   const handleFacebookSignIn = async () => {
     try {
+      console.log("Initiating Facebook sign-in")
       await signInWithFacebook()
+      // Redirect will be handled by the callback route
     } catch (error: any) {
+      console.error("Exception during Facebook sign-in:", error)
       toast({
         title: "Error",
         description: error.message || "An error occurred during Facebook sign in.",
@@ -111,8 +149,11 @@ export default function LoginPage() {
 
   const handleAppleSignIn = async () => {
     try {
+      console.log("Initiating Apple sign-in")
       await signInWithApple()
+      // Redirect will be handled by the callback route
     } catch (error: any) {
+      console.error("Exception during Apple sign-in:", error)
       toast({
         title: "Error",
         description: error.message || "An error occurred during Apple sign in.",
@@ -121,6 +162,9 @@ export default function LoginPage() {
     }
   }
 
+  // Safety function to render the login form and handle any rendering errors
+  const renderLoginForm = () => {
+    try {
   return (
     <div className="min-h-screen bg-teal flex flex-col justify-center items-center p-4">
       <div className="pattern-grid fixed inset-0 pointer-events-none"></div>
@@ -143,6 +187,7 @@ export default function LoginPage() {
               onClick={handleGoogleSignIn}
               className="w-full aspect-square bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 flex items-center justify-center"
               title="Continue with Google"
+                  disabled={isLoading || authLoading}
             >
               <FaGoogle className="text-red-500 text-xl" />
             </Button>
@@ -151,6 +196,7 @@ export default function LoginPage() {
               onClick={handleFacebookSignIn}
               className="w-full aspect-square bg-[#1877F2] hover:bg-[#166FE5] text-white flex items-center justify-center"
               title="Continue with Facebook"
+                  disabled={isLoading || authLoading}
             >
               <FaFacebook className="text-xl" />
             </Button>
@@ -159,6 +205,7 @@ export default function LoginPage() {
               onClick={handleAppleSignIn}
               className="w-full aspect-square bg-black hover:bg-gray-900 text-white flex items-center justify-center"
               title="Continue with Apple"
+                  disabled={isLoading || authLoading}
             >
               <FaApple className="text-xl" />
             </Button>
@@ -185,6 +232,7 @@ export default function LoginPage() {
                 onChange={handleChange}
                 required
                 className="bg-white/70"
+                    disabled={isLoading || authLoading}
               />
             </div>
 
@@ -204,11 +252,12 @@ export default function LoginPage() {
                 onChange={handleChange}
                 required
                 className="bg-white/70"
+                    disabled={isLoading || authLoading}
               />
             </div>
 
-            <Button type="submit" className="w-full bg-navy hover:bg-navy/90 text-white" disabled={isLoading}>
-              {isLoading ? "Signing in..." : "Sign In"}
+                <Button type="submit" className="w-full bg-navy hover:bg-navy/90 text-white" disabled={isLoading || authLoading}>
+                  {isLoading || authLoading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
 
@@ -223,5 +272,25 @@ export default function LoginPage() {
         </div>
       </motion.div>
     </div>
-  )
+      );
+    } catch (renderError) {
+      console.error("Error rendering login form:", renderError);
+      return (
+        <div className="min-h-screen bg-teal flex flex-col justify-center items-center p-4">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border-2 border-navy/20 p-8 max-w-md">
+            <h2 className="text-xl font-bold mb-4">Something went wrong</h2>
+            <p>Sorry, there was an error loading the login page. Please try refreshing the page.</p>
+            <Button 
+              className="mt-4 w-full bg-navy hover:bg-navy/90 text-white"
+              onClick={() => window.location.reload()}
+            >
+              Refresh Page
+            </Button>
+          </div>
+        </div>
+      );
+    }
+  };
+
+  return renderLoginForm();
 }

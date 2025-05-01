@@ -4,12 +4,16 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Star, Minus, Plus, ShoppingCart, ArrowLeft, Check } from "lucide-react"
+import { Star, Minus, Plus, ArrowLeft, Check, ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useCart } from "@/contexts/cart-context"
 import type { Product } from "@/lib/product-actions"
+import { createOrder } from "@/lib/actions"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/components/ui/use-toast"
+import { useAuth } from "@/contexts/auth-context"
+import { useOrders } from "@/contexts/order-context"
 
 type ProductDetailProps = {
   product: Product
@@ -18,10 +22,64 @@ type ProductDetailProps = {
 
 export default function ProductDetail({ product, relatedProducts }: ProductDetailProps) {
   const [quantity, setQuantity] = useState(1)
-  const { addItem, isLoading } = useCart()
+  const [isLoading, setIsLoading] = useState(false)
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const router = useRouter()
+  const { refreshOrderCount } = useOrders()
 
-  const handleAddToCart = () => {
-    addItem(product, quantity)
+  const handleOrder = async () => {
+    if (!user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to place an order",
+        variant: "destructive",
+      })
+      router.push('/auth/login')
+      return
+    }
+    
+    setIsLoading(true)
+    
+    try {
+      const userData = {
+        name: user.user_metadata?.full_name || user.user_metadata?.name || user.email,
+        email: user.email,
+        street: user.user_metadata?.street || "",
+        city: user.user_metadata?.city || "",
+        state: user.user_metadata?.state || "",
+        country: user.user_metadata?.country || "Tanzania",
+        postal_code: user.user_metadata?.postal_code || "",
+      }
+      
+      const result = await createOrder(product.id, quantity, user.id, userData)
+      
+      if (result.success) {
+        toast({
+          title: "Order placed",
+          description: "Your order has been successfully placed",
+        })
+        
+        await refreshOrderCount()
+        
+        router.push(`/orders/${result.orderId}`)
+      } else {
+        toast({
+          title: "Error",
+          description: result.message || "Failed to place order",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error placing order:", error)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const incrementQuantity = () => {
@@ -122,11 +180,17 @@ export default function ProductDetail({ product, relatedProducts }: ProductDetai
 
               <Button
                 className="bg-navy hover:bg-navy/90 text-white rounded-full px-6 sm:px-8 w-full sm:w-auto"
-                onClick={handleAddToCart}
+                onClick={handleOrder}
                 disabled={isLoading || product.stock === 0}
               >
-                <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                Add to Cart
+                {isLoading ? (
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                ) : (
+                  <>
+                    <ShoppingBag className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                    Order Now
+                  </>
+                )}
               </Button>
             </div>
 

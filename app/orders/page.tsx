@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { Eye, Search } from "lucide-react"
 import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
+import { createClient } from "@supabase/supabase-js"
 
 type OrderItem = {
   id: number
@@ -52,96 +53,64 @@ export default function OrdersPage() {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        // In a real app, you would fetch orders from your API
-        // For this demo, we'll use mock data
-        const mockOrders: Order[] = [
-          {
-            id: "ORD-001",
-            customer_name: "John Doe",
-            created_at: "2024-04-16",
-            status: "completed",
-            total: 299.99,
-            items: [
-              {
-                id: 1,
-                name: "Premium Widget",
-                quantity: 2,
-                price: 149.99,
-                image: "/images/products/widget.jpg"
-              }
-            ],
-            shipping_address: {
-              street: "123 Main St",
-              city: "New York",
-              state: "NY",
-              country: "United States",
-              postal_code: "10001"
-            }
-          },
-          {
-            id: "ORD-002",
-            customer_name: "Jane Smith",
-            created_at: "2024-04-15",
-            status: "pending",
-            total: 199.99,
-            items: [
-              {
-                id: 2,
-                name: "Super Gadget",
-                quantity: 1,
-                price: 199.99,
-                image: "/images/products/gadget.jpg"
-              }
-            ],
-            shipping_address: {
-              street: "456 Oak Ave",
-              city: "Los Angeles",
-              state: "CA",
-              country: "United States",
-              postal_code: "90001"
-            }
-          },
-          {
-            id: "ORD-003",
-            customer_name: "Bob Wilson",
-            created_at: "2024-04-14",
-            status: "cancelled",
-            total: 499.99,
-            items: [
-              {
-                id: 3,
-                name: "Mega Device",
-                quantity: 1,
-                price: 499.99,
-                image: "/images/products/device.jpg"
-              }
-            ],
-            shipping_address: {
-              street: "789 Pine St",
-              city: "Chicago",
-              state: "IL",
-              country: "United States",
-              postal_code: "60601"
-            }
-          }
-        ]
+        if (!user) return;
         
-        setOrders(mockOrders)
+        setIsLoadingOrders(true);
+        
+        // Fetch orders from Supabase
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        // Fetch all orders for the current user
+        const { data: orderData, error: orderError } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+          
+        if (orderError) {
+          throw orderError;
+        }
+        
+        // For each order, fetch its items
+        const ordersWithItems = await Promise.all(orderData.map(async (order) => {
+          const { data: items, error: itemsError } = await supabase
+            .from('order_items')
+            .select('*')
+            .eq('order_id', order.id);
+            
+          if (itemsError) {
+            console.error(`Error fetching items for order ${order.id}:`, itemsError);
+            return {
+              ...order,
+              items: []
+            };
+          }
+          
+          return {
+            ...order,
+            items: items
+          };
+        }));
+        
+        setOrders(ordersWithItems);
       } catch (error) {
+        console.error('Error fetching orders:', error);
         toast({
           title: "Error",
           description: "Failed to load orders. Please try again later.",
           variant: "destructive",
-        })
+        });
       } finally {
-        setIsLoadingOrders(false)
+        setIsLoadingOrders(false);
       }
-    }
+    };
 
     if (user) {
-      fetchOrders()
+      fetchOrders();
     }
-  }, [user, toast])
+  }, [user, toast]);
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||

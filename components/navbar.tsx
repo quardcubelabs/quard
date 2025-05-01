@@ -6,7 +6,7 @@ import { Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Logo from "@/components/logo"
-import CartIcon from "@/components/cart-icon"
+import OrderIcon from "@/components/order-icon"
 import UserAvatar from "@/components/user-avatar"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAuth } from "@/contexts/auth-context"
@@ -82,7 +82,7 @@ export default function Navbar() {
           </nav>
 
           <div className="hidden md:flex items-center gap-4">
-            <CartIcon />
+            <OrderIcon />
             <UserAvatar />
             {!user && !isLoading && (
               <Button
@@ -96,10 +96,8 @@ export default function Navbar() {
 
           {/* Mobile Menu Button and Cart */}
           <div className="md:hidden flex items-center gap-1 sm:gap-2">
-            <CartIcon />
-            <div className="mx-2">
-              <UserAvatar />
-            </div>
+            <OrderIcon />
+            <UserAvatar />
             <button className="p-1 text-navy" onClick={() => setIsMenuOpen(!isMenuOpen)}>
               {isMenuOpen ? <X className="h-5 w-5 sm:h-6 sm:w-6" /> : <Menu className="h-5 w-5 sm:h-6 sm:w-6" />}
             </button>

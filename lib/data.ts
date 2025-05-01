@@ -807,5 +807,3 @@ export const categories = [
   "Connectivity & Networking",
   "IT Products & Services",
 ]
-
-export const cartItems = []

@@ -2,8 +2,8 @@ import type React from "react"
 import { Montserrat } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { CartProvider } from "@/contexts/cart-context"
 import { AuthProvider } from "@/contexts/auth-context"
+import { OrderProvider } from "@/contexts/order-context"
 import { Toaster } from "@/components/ui/toaster"
 
 const montserrat = Montserrat({ subsets: ["latin"] })
@@ -25,10 +25,10 @@ export default function RootLayout({
       <body className={montserrat.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <AuthProvider>
-            <CartProvider>
+            <OrderProvider>
               {children}
               <Toaster />
-            </CartProvider>
+            </OrderProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
