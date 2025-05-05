@@ -11,9 +11,11 @@ const getCookieDomain = (req: NextRequest): string | undefined => {
   if (process.env.NODE_ENV === 'production' || 
       hostname !== 'localhost' && hostname !== '127.0.0.1') {
     // In production, use the Vercel domain
+    console.log("[Middleware] Using production cookie domain")
     return 'quardcubelabs-three.vercel.app'
   }
   // Don't set domain for localhost
+  console.log("[Middleware] Using localhost cookie domain (undefined)")
   return undefined
 }
 
@@ -52,13 +54,19 @@ export async function middleware(req: NextRequest) {
   // URLs that should redirect to the home page if already authenticated (auth pages)
   const authRoutes = ['/auth/login', '/auth/register', '/auth/forgot-password']
   // URLs that skip middleware checks
-  const publicRoutes = ['/api', '/_next', '/static', '/favicon.ico', '/auth/callback']
+  const publicRoutes = ['/api', '/_next', '/static', '/favicon.ico']
   
   // Get the pathname from the URL
   const { pathname } = req.nextUrl
 
   // Skip middleware for public routes and API requests
   if (publicRoutes.some(route => pathname.startsWith(route))) {
+    return res
+  }
+
+  // Special handling for auth callback route
+  if (pathname.startsWith('/auth/callback')) {
+    // Let the callback route handle the authentication
     return res
   }
 

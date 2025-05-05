@@ -70,10 +70,18 @@ export async function GET(request: Request) {
         const cookieStore = cookies()
         const supabase = createRouteHandlerClient<Database>({ 
           cookies: () => cookieStore 
+        }, {
+          cookieOptions: {
+            domain: cookieDomain,
+            path: '/',
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+          }
         })
         
         try {
           console.log("[Callback] Exchanging code for session...")
+          
           // Exchange the code for a session - this will automatically set the cookies
           const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
           
@@ -93,79 +101,17 @@ export async function GET(request: Request) {
           
           console.log("[Callback] Session created successfully for user:", data.session.user.id)
           
-          // Log session information for debugging
-          console.log("[Callback] Session established, auth cookies should be set")
-          
-          // Get user profile to check if we need to create one
-          const { data: { user }, error: userError } = await supabase.auth.getUser()
-          
-          if (userError) {
-            console.error("[Callback] Error getting user:", userError)
-            return NextResponse.redirect(
-              `${redirectBase}/auth/login?error=user_error&message=${encodeURIComponent("Failed to get user data")}`
-            )
-          }
-
-          console.log("[Callback] Retrieved user:", user?.email)
-
-          // Create or update user profile if we have a user
-          if (user) {
-            try {
-              // Only include essential user data to avoid memory issues
-              const userData: UserProfileData = {
-                user_id: user.id,
-                email: user.email || '',
-                updated_at: new Date().toISOString(),
-                name: user.user_metadata?.name || user.user_metadata?.full_name || undefined,
-                avatar_url: user.user_metadata?.avatar_url || undefined,
-                created_at: undefined
-              };
-              
-              try {
-                // Check if user profile exists
-                const { data: existingProfile } = await supabase
-                  .from('user_profiles')
-                  .select('id')
-                  .eq('user_id', user.id)
-                  .maybeSingle();
-                
-                if (!existingProfile) {
-                  // If this is a new user, add creation timestamp
-                  userData.created_at = new Date().toISOString();
-                  console.log("[Callback] Creating new user profile")
-                } else {
-                  console.log("[Callback] Updating existing user profile")
-                }
-              } catch (profileCheckError) {
-                console.error("[Callback] Error checking existing profile:", profileCheckError);
-                // Continue with user creation even if profile check fails
-                userData.created_at = new Date().toISOString();
-              }
-              
-              try {
-                const { error: profileError } = await supabase
-                  .from('user_profiles')
-                  .upsert(userData, { onConflict: 'user_id' });
-
-                if (profileError) {
-                  console.error("[Callback] Error storing user profile:", profileError);
-                } else {
-                  console.log("[Callback] User profile stored successfully")
-                }
-              } catch (upsertError) {
-                console.error("[Callback] Error upserting user profile:", upsertError);
-              }
-            } catch (profileStoreError) {
-              console.error("[Callback] Error in profile storage:", profileStoreError);
-              // Continue even if profile storage fails - authentication still worked
-            }
-          }
-
           // Create a response with custom cookie settings
           const response = NextResponse.redirect(`${redirectBase}`)
           
-          // Let createRouteHandlerClient handle the cookies automatically
-          // Just log what we're doing
+          // Set the session cookie
+          response.cookies.set('sb-auth-token', data.session.access_token, {
+            domain: cookieDomain,
+            path: '/',
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+          })
+          
           console.log(`[Callback] Auth completed, redirecting to ${redirectBase}`)
           console.log(`[Callback] Cookie domain: ${cookieDomain || 'default (localhost)'}`)
           

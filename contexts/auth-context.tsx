@@ -11,14 +11,14 @@ const PRODUCTION_URL = "https://quardcubelabs-three.vercel.app"
 
 // Helper function to get the appropriate base URL
 const getBaseUrl = () => {
-  // In production, use the Vercel deployment URL
-  // In development, use the current origin
+  // Always use the Vercel deployment URL in production
   if (typeof window !== 'undefined') {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return window.location.origin
     }
   }
-  return PRODUCTION_URL
+  // Force Vercel URL in production
+  return 'https://quardcubelabs-three.vercel.app'
 }
 
 type AuthContextType = {
@@ -333,30 +333,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+      console.log("[Auth] Initiating Google sign-in")
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
         options: {
           redirectTo: `${baseUrl}/auth/callback`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
-          }
+          },
+          skipBrowserRedirect: false
         },
       })
-      
+
       if (error) {
-        console.error("Error initiating Google sign-in:", error)
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        })
+        console.error("[Auth] Google sign-in error:", error)
+        throw error
       }
+
+      console.log("[Auth] Google sign-in initiated successfully")
     } catch (error: any) {
-      console.error("Exception during Google sign-in:", error)
+      console.error("[Auth] Exception during Google sign-in:", error)
       toast({
         title: "Error",
-        description: "Failed to initiate Google sign-in",
+        description: error.message || "An error occurred during Google sign in.",
         variant: "destructive",
       })
     }
@@ -364,26 +364,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithFacebook = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "facebook",
+      console.log("[Auth] Initiating Facebook sign-in")
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'facebook',
         options: {
           redirectTo: `${baseUrl}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          skipBrowserRedirect: false
         },
       })
-      
+
       if (error) {
-        console.error("Error initiating Facebook sign-in:", error)
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        })
+        console.error("[Auth] Facebook sign-in error:", error)
+        throw error
       }
+
+      console.log("[Auth] Facebook sign-in initiated successfully")
     } catch (error: any) {
-      console.error("Exception during Facebook sign-in:", error)
+      console.error("[Auth] Exception during Facebook sign-in:", error)
       toast({
         title: "Error",
-        description: "Failed to initiate Facebook sign-in",
+        description: error.message || "An error occurred during Facebook sign in.",
         variant: "destructive",
       })
     }
@@ -391,26 +395,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithApple = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "apple",
+      console.log("[Auth] Initiating Apple sign-in")
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
         options: {
           redirectTo: `${baseUrl}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          skipBrowserRedirect: false
         },
       })
-      
+
       if (error) {
-        console.error("Error initiating Apple sign-in:", error)
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        })
+        console.error("[Auth] Apple sign-in error:", error)
+        throw error
       }
+
+      console.log("[Auth] Apple sign-in initiated successfully")
     } catch (error: any) {
-      console.error("Exception during Apple sign-in:", error)
+      console.error("[Auth] Exception during Apple sign-in:", error)
       toast({
         title: "Error",
-        description: "Failed to initiate Apple sign-in",
+        description: error.message || "An error occurred during Apple sign in.",
         variant: "destructive",
       })
     }

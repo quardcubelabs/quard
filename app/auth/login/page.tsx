@@ -120,7 +120,8 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     try {
       console.log("Initiating Google sign-in")
-      await signInWithGoogle()
+      console.log("OAuth redirectTo:", "https://quardcubelabs-three.vercel.app/auth/callback");
+      await signInWithGoogle({ redirectTo: "https://quardcubelabs-three.vercel.app/auth/callback" })
       // Redirect will be handled by the callback route
     } catch (error: any) {
       console.error("Exception during Google sign-in:", error)
@@ -135,7 +136,8 @@ export default function LoginPage() {
   const handleFacebookSignIn = async () => {
     try {
       console.log("Initiating Facebook sign-in")
-      await signInWithFacebook()
+      console.log("OAuth redirectTo:", "https://quardcubelabs-three.vercel.app/auth/callback");
+      await signInWithFacebook({ redirectTo: "https://quardcubelabs-three.vercel.app/auth/callback" })
       // Redirect will be handled by the callback route
     } catch (error: any) {
       console.error("Exception during Facebook sign-in:", error)
@@ -150,7 +152,8 @@ export default function LoginPage() {
   const handleAppleSignIn = async () => {
     try {
       console.log("Initiating Apple sign-in")
-      await signInWithApple()
+      console.log("OAuth redirectTo:", "https://quardcubelabs-three.vercel.app/auth/callback");
+      await signInWithApple({ redirectTo: "https://quardcubelabs-three.vercel.app/auth/callback" })
       // Redirect will be handled by the callback route
     } catch (error: any) {
       console.error("Exception during Apple sign-in:", error)
