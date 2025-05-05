@@ -124,6 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const setData = async () => {
       try {
+        console.log("[Auth] Initializing auth state...")
+        
         // Get the initial session
         const {
           data: { session },
@@ -131,12 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } = await supabase.auth.getSession()
         
         if (error) {
-          console.error("Error getting session:", error)
+          console.error("[Auth] Error getting initial session:", error)
           return
         }
         
         if (session) {
-          console.log("Initial session found:", session.user.id)
+          console.log("[Auth] Initial session found for user:", session.user.id)
           
           try {
             // Store sanitized user and session to avoid memory issues
@@ -144,9 +146,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (safeSession) {
               setSession(safeSession);
               setUser(safeSession.user as User);
+              console.log("[Auth] Session and user state updated")
             }
           } catch (sessionError) {
-            console.error("Error processing session:", sessionError);
+            console.error("[Auth] Error processing initial session:", sessionError);
           }
           
           // Also check if user profile exists, if not create it
@@ -154,12 +157,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
               const { data: profile, error: profileError } = await supabase
                 .from('user_profiles')
-                .select('id, user_id, email, name')  // Select only necessary fields
+                .select('id, user_id, email, name')
                 .eq('user_id', session.user.id)
                 .single();
                 
               if (profileError && profileError.code !== 'PGRST116') {
-                console.error("Error checking user profile:", profileError)
+                console.error("[Auth] Error checking user profile:", profileError)
               }
               
               // If no profile exists, create one
@@ -182,21 +185,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     .upsert(userData);
                     
                   if (insertError) {
-                    console.error("Error creating user profile:", insertError)
+                    console.error("[Auth] Error creating user profile:", insertError)
+                  } else {
+                    console.log("[Auth] User profile created successfully")
                   }
                 } catch (error) {
-                  console.error("Error in profile creation:", error)
+                  console.error("[Auth] Error in profile creation:", error)
                 }
+              } else {
+                console.log("[Auth] User profile found")
               }
             } catch (profileCheckError) {
-              console.error("Error checking for user profile:", profileCheckError);
+              console.error("[Auth] Error checking for user profile:", profileCheckError);
             }
           }
         } else {
-          console.log("No initial session found")
+          console.log("[Auth] No initial session found")
         }
       } catch (error) {
-        console.error("Error in auth initialization:", error)
+        console.error("[Auth] Error in auth initialization:", error)
       } finally {
         setIsLoading(false)
       }
@@ -206,48 +213,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Set up auth state change listener
     try {
+      console.log("[Auth] Setting up auth state change listener")
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((event, session) => {
-        console.log("Auth state changed:", event)
+      } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log("[Auth] Auth state changed:", event)
         
         try {
           if (session) {
-            console.log("New session established for user:", session.user.id)
+            console.log("[Auth] New session established for user:", session.user.id)
             
             // Store sanitized user and session data
             const safeSession = createSafeSession(session);
             if (safeSession) {
               setSession(safeSession);
               setUser(safeSession.user as User);
+              console.log("[Auth] Session and user state updated after auth change")
             }
             
             // After successful sign-in, redirect to home page
             if (event === 'SIGNED_IN') {
-              // Redirect to the production URL if we're in production
-              if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                window.location.href = `${PRODUCTION_URL}/`;
-              } else {
-                router.push('/')
-              }
+              console.log("[Auth] Redirecting to home after sign in")
+              router.push('/')
             }
           } else {
-            console.log("Session cleared")
+            console.log("[Auth] Session cleared")
             setSession(null)
             setUser(null)
             
             // After sign out, redirect to login page
             if (event === 'SIGNED_OUT') {
-              // Redirect to the production URL if we're in production
-              if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                window.location.href = `${PRODUCTION_URL}/auth/login`;
-              } else {
-                router.push('/auth/login')
-              }
+              console.log("[Auth] Redirecting to login after sign out")
+              router.push('/auth/login')
             }
           }
         } catch (stateChangeError) {
-          console.error("Error handling auth state change:", stateChangeError);
+          console.error("[Auth] Error handling auth state change:", stateChangeError);
         } finally {
           setIsLoading(false)
         }
@@ -255,13 +256,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return () => {
         try {
+          console.log("[Auth] Cleaning up auth state change listener")
           subscription.unsubscribe()
         } catch (unsubError) {
-          console.error("Error unsubscribing from auth state changes:", unsubError);
+          console.error("[Auth] Error unsubscribing from auth state changes:", unsubError);
         }
       }
     } catch (subscriptionError) {
-      console.error("Error setting up auth state change listener:", subscriptionError);
+      console.error("[Auth] Error setting up auth state change listener:", subscriptionError);
       setIsLoading(false);
       return () => {}; // Empty cleanup if setup failed
     }
@@ -342,7 +344,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             access_type: 'offline',
             prompt: 'consent',
           },
-          skipBrowserRedirect: false
+          skipBrowserRedirect: false,
+          flowType: 'pkce'
         },
       })
 
@@ -373,7 +376,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             access_type: 'offline',
             prompt: 'consent',
           },
-          skipBrowserRedirect: false
+          skipBrowserRedirect: false,
+          flowType: 'pkce'
         },
       })
 
@@ -404,7 +408,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             access_type: 'offline',
             prompt: 'consent',
           },
-          skipBrowserRedirect: false
+          skipBrowserRedirect: false,
+          flowType: 'pkce'
         },
       })
 

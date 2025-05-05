@@ -7,15 +7,12 @@ const PRODUCTION_URL = "https://quardcubelabs-three.vercel.app"
 
 // Helper to determine domain for cookie settings
 const getCookieDomain = (req: NextRequest): string | undefined => {
-  const { hostname } = req.nextUrl
-  if (process.env.NODE_ENV === 'production' || 
-      hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    // In production, use the Vercel domain
-    console.log("[Middleware] Using production cookie domain")
-    return 'quardcubelabs-three.vercel.app'
+  // Only set domain in production and when not on localhost
+  if (process.env.NODE_ENV === 'production' && 
+      req.nextUrl.hostname !== 'localhost' && 
+      req.nextUrl.hostname !== '127.0.0.1') {
+    return req.nextUrl.hostname
   }
-  // Don't set domain for localhost
-  console.log("[Middleware] Using localhost cookie domain (undefined)")
   return undefined
 }
 
@@ -32,7 +29,7 @@ export async function middleware(req: NextRequest) {
     { req, res },
     {
       cookieOptions: {
-        // These options are essential for cookies to work in production
+        // Only set domain if we're in production
         domain: cookieDomain,
         path: '/',
         sameSite: 'lax',
@@ -44,10 +41,19 @@ export async function middleware(req: NextRequest) {
   // Refresh the session if it exists
   const {
     data: { session },
+    error: sessionError
   } = await supabase.auth.getSession()
 
-  // Log authentication status for debugging
-  console.log(`[Middleware] Path: ${req.nextUrl.pathname}, Authenticated: ${!!session}`)
+  // Log detailed authentication status for debugging
+  console.log(`[Middleware] Path: ${req.nextUrl.pathname}`)
+  console.log(`[Middleware] Session exists: ${!!session}`)
+  if (sessionError) {
+    console.error(`[Middleware] Session error:`, sessionError)
+  }
+  if (session) {
+    console.log(`[Middleware] User ID: ${session.user.id}`)
+    console.log(`[Middleware] Session expires at: ${new Date(session.expires_at! * 1000).toISOString()}`)
+  }
 
   // URLs that require authentication
   const protectedRoutes = ['/account', '/orders']
@@ -61,29 +67,45 @@ export async function middleware(req: NextRequest) {
 
   // Skip middleware for public routes and API requests
   if (publicRoutes.some(route => pathname.startsWith(route))) {
+    console.log(`[Middleware] Skipping middleware for public route: ${pathname}`)
     return res
   }
 
   // Special handling for auth callback route
   if (pathname.startsWith('/auth/callback')) {
-    // Let the callback route handle the authentication
+    console.log(`[Middleware] Allowing callback route: ${pathname}`)
     return res
   }
 
   // If user is signed in and trying to access an auth page, redirect to home
   if (session && authRoutes.some(route => pathname.startsWith(route))) {
+    console.log(`[Middleware] Authenticated user accessing auth page, redirecting to home`)
     const redirectUrl = new URL('/', req.url)
     return NextResponse.redirect(redirectUrl)
   }
 
   // If user is not signed in and trying to access a protected page, redirect to login
   if (!session && protectedRoutes.some(route => pathname.startsWith(route))) {
+    console.log(`[Middleware] Unauthenticated user accessing protected route, redirecting to login`)
     const redirectUrl = new URL('/auth/login', req.url)
     // Add the requested URL as a query parameter so we can redirect after login
     redirectUrl.searchParams.set('redirectTo', pathname)
     return NextResponse.redirect(redirectUrl)
   }
 
+  // For the root path, if user is not authenticated, allow access
+  if (pathname === '/' && !session) {
+    console.log(`[Middleware] Unauthenticated user accessing home page, allowing access`)
+    return res
+  }
+
+  // For the root path, if user is authenticated, allow access
+  if (pathname === '/' && session) {
+    console.log(`[Middleware] Authenticated user accessing home page, allowing access`)
+    return res
+  }
+
+  console.log(`[Middleware] Allowing access to: ${pathname}`)
   return res
 }
 

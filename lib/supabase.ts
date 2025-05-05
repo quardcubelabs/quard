@@ -54,8 +54,22 @@ export const createBrowserClient = () => {
       storage: {
         getItem: (key) => {
           try {
+            // First try to get from localStorage
             const storedData = globalThis.localStorage?.getItem(key) ?? null
-            return storedData
+            if (storedData) {
+              console.log(`[Supabase] Retrieved session from localStorage`)
+              return storedData
+            }
+            
+            // If not in localStorage, try to get from cookies
+            const cookies = document.cookie.split(';')
+            const cookie = cookies.find(c => c.trim().startsWith(`${key}=`))
+            if (cookie) {
+              console.log(`[Supabase] Retrieved session from cookies`)
+              return decodeURIComponent(cookie.split('=')[1])
+            }
+            
+            return null
           } catch (error) {
             console.error(`[Supabase] Error getting storage item: ${error}`)
             return null
@@ -63,7 +77,10 @@ export const createBrowserClient = () => {
         },
         setItem: (key, value) => {
           try {
+            // Store in both localStorage and cookies for redundancy
             globalThis.localStorage?.setItem(key, value)
+            document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=2592000; SameSite=Lax`
+            console.log(`[Supabase] Stored session in localStorage and cookies`)
           } catch (error) {
             console.error(`[Supabase] Error setting storage item: ${error}`)
           }
@@ -71,6 +88,8 @@ export const createBrowserClient = () => {
         removeItem: (key) => {
           try {
             globalThis.localStorage?.removeItem(key)
+            document.cookie = `${key}=; path=/; max-age=0; SameSite=Lax`
+            console.log(`[Supabase] Removed session from localStorage and cookies`)
           } catch (error) {
             console.error(`[Supabase] Error removing storage item: ${error}`)
           }
@@ -97,7 +116,40 @@ export const createServerClient = (cookieOptions?: { cookies: () => { get: (name
         flowType: 'pkce',
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false // This must be false for server-side rendering
+        detectSessionInUrl: false, // This must be false for server-side rendering
+        storage: {
+          getItem: (key) => {
+            try {
+              return cookieOptions.cookies().get(key) ?? null
+            } catch (error) {
+              console.error(`[Supabase] Error getting cookie: ${error}`)
+              return null
+            }
+          },
+          setItem: (key, value) => {
+            try {
+              cookieOptions.cookies().set(key, value, {
+                path: '/',
+                sameSite: 'lax',
+                secure: process.env.NODE_ENV === 'production'
+              })
+            } catch (error) {
+              console.error(`[Supabase] Error setting cookie: ${error}`)
+            }
+          },
+          removeItem: (key) => {
+            try {
+              cookieOptions.cookies().set(key, '', {
+                path: '/',
+                sameSite: 'lax',
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: 0
+              })
+            } catch (error) {
+              console.error(`[Supabase] Error removing cookie: ${error}`)
+            }
+          }
+        }
       }
     })
   } else {

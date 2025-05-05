@@ -29,15 +29,12 @@ const getRedirectURL = (requestUrl: URL): string => {
 
 // Helper to determine domain for cookie settings
 const getCookieDomain = (requestUrl: URL): string | undefined => {
-  if (process.env.NODE_ENV === 'production' || 
-      requestUrl.hostname !== 'localhost' && requestUrl.hostname !== '127.0.0.1') {
-    // In production, use the Vercel domain
-    console.log("[Callback] Using production cookie domain")
-    return 'quardcubelabs-three.vercel.app'
+  // Only set domain in production and when not on localhost
+  if (process.env.NODE_ENV === 'production' && 
+      requestUrl.hostname !== 'localhost' && 
+      requestUrl.hostname !== '127.0.0.1') {
+    return requestUrl.hostname
   }
-  
-  // Don't set domain for localhost
-  console.log("[Callback] Using localhost cookie domain (undefined)")
   return undefined
 }
 
@@ -82,6 +79,16 @@ export async function GET(request: Request) {
         try {
           console.log("[Callback] Exchanging code for session...")
           
+          // Get the code verifier from the cookie
+          const codeVerifier = cookieStore.get('code_verifier')?.value
+          
+          if (!codeVerifier) {
+            console.error("[Callback] No code verifier found in cookies")
+            return NextResponse.redirect(
+              `${redirectBase}/auth/login?error=no_code_verifier&message=${encodeURIComponent("No code verifier found")}`
+            )
+          }
+          
           // Exchange the code for a session - this will automatically set the cookies
           const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
           
@@ -104,16 +111,38 @@ export async function GET(request: Request) {
           // Create a response with custom cookie settings
           const response = NextResponse.redirect(`${redirectBase}`)
           
-          // Set the session cookie
+          // Clear the code verifier cookie
+          response.cookies.set('code_verifier', '', {
+            domain: cookieDomain,
+            path: '/',
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 0
+          })
+          
+          // Set the session cookie with proper options
           response.cookies.set('sb-auth-token', data.session.access_token, {
             domain: cookieDomain,
             path: '/',
             sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production'
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 60 * 60 * 24 * 7 // 7 days
           })
+          
+          // Set the refresh token cookie
+          if (data.session.refresh_token) {
+            response.cookies.set('sb-refresh-token', data.session.refresh_token, {
+              domain: cookieDomain,
+              path: '/',
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+              maxAge: 60 * 60 * 24 * 30 // 30 days
+            })
+          }
           
           console.log(`[Callback] Auth completed, redirecting to ${redirectBase}`)
           console.log(`[Callback] Cookie domain: ${cookieDomain || 'default (localhost)'}`)
+          console.log(`[Callback] Session expires at: ${new Date(data.session.expires_at! * 1000).toISOString()}`)
           
           return response
           
